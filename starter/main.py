@@ -5,6 +5,8 @@ import synth
 import similarity as sim
 import blend
 import search
+import random
+import numpy as np
 
 def main() -> None:
     ap = argparse.ArgumentParser()
@@ -13,6 +15,9 @@ def main() -> None:
     ap.add_argument("--iterations", type=int, default=50)
     ap.add_argument("--output", default="voice.pt")
     args = ap.parse_args()
+    random.seed(42)
+    np.random.seed(42)
+    torch.manual_seed(42)
     target = sim.target_embedding(args.reference_dir)
     with open(args.texts_file, "r") as f:
         texts = [line.strip() for line in f if line.strip()]

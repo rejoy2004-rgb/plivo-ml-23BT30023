@@ -45,13 +45,22 @@ class CMAESSearch:
     def __init__(self, initial_tensor: torch.Tensor, target_embedding: np.ndarray, texts: list[str], pop_size: int = 4):
         self.mean, self.sigma, self.pop_size, self.target_embedding, self.texts = initial_tensor.clone(), 0.05, pop_size, target_embedding, texts
         self.best_tensor, self.best_score = self.mean.clone(), get_fitness(self.mean, target_embedding, texts)
+        self.C_diag = torch.ones_like(self.mean)
+        self.step_count = 0
     def step(self, sigma: float = None) -> tuple[torch.Tensor, float]:
         if sigma is not None: self.sigma = sigma
-        cands = [self.mean + self.sigma * torch.randn_like(self.mean) for _ in range(self.pop_size)]
-        scores = [get_fitness(c, self.target_embedding, self.texts) for c in cands]
+        active_text = [self.texts[self.step_count % len(self.texts)]]
+        self.step_count += 1
+        cands = [self.mean + self.sigma * self.C_diag * torch.randn_like(self.mean) for _ in range(self.pop_size)]
+        scores = [get_fitness(c, self.target_embedding, active_text) for c in cands]
         idx = np.argsort(scores)[::-1]
-        if scores[idx[0]] > self.best_score: self.best_tensor, self.best_score = cands[idx[0]].clone(), scores[idx[0]]
-        self.mean = torch.stack([cands[i] for i in idx[:max(1, self.pop_size // 2)]]).mean(dim=0)
+        selected = [cands[i] for i in idx[:max(1, self.pop_size // 2)]]
+        old_mean = self.mean.clone()
+        self.mean = torch.stack(selected).mean(dim=0)
+        diffs = torch.stack([c - old_mean for c in selected])
+        self.C_diag = 0.9 * self.C_diag + 0.1 * diffs.std(dim=0).clamp(0.01, 2.0)
+        score_full = get_fitness(self.mean, self.target_embedding, self.texts)
+        if score_full > self.best_score: self.best_tensor, self.best_score = self.mean.clone(), score_full
         return self.best_tensor, self.best_score
 
 def run_search(initial_tensor: torch.Tensor, target_embedding: np.ndarray, texts: list[str], iterations: int) -> tuple[torch.Tensor, float, list[tuple[int, float]]]:
