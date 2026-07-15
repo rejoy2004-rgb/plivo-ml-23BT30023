@@ -1,0 +1,5 @@
+kokoro_assets/
+__pycache__/
+*.wav
+*.npy
+voice.pt
