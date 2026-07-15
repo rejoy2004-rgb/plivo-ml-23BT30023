@@ -95,39 +95,36 @@
     <div class="container">
         <header>
             <h1>Kokoro-82M Voice Cloning Report</h1>
-            <p class="subtitle">Optimized Evolutionary Search & Manifold Constraints for Speaker Similarity</p>
+            <p class="subtitle">PCA Subspace Search & Separable CMA-ES for Natural Voice Synthesis</p>
         </header>
 
         <div class="grid">
             <div class="card">
                 <h2>Performance Summary</h2>
-                <div class="stat-value">0.5493</div>
+                <div class="stat-value">0.5698</div>
                 <p style="margin: 0; color: var(--text-secondary)">Final Speaker Cosine Similarity Score</p>
             </div>
 
             <div class="card">
                 <h2>Execution Time</h2>
-                <div class="stat-value">~159s</div>
+                <div class="stat-value">~235s</div>
                 <p style="margin: 0; color: var(--text-secondary)">Total optimization run time on CPU</p>
             </div>
 
             <div class="card card-full">
-                <h2>Pipeline Architecture & Algorithms</h2>
-                <ul>
-                    <li><strong>Initial Blending</strong>: Ranks 54 stock voices with cosine distance and performs Dirichlet weight sampling to create a high-quality initial convex style blend.</li>
-                    <li><strong>Separable Diagonal CMA-ES</strong>: Upgraded search strategy that adjusts variance vectors per-dimension to focus mutations on active voice control channels.</li>
-                    <li><strong>Manifold Realism Envelope</strong>: Clamps parameters within <code>[stock_min, stock_max]</code> boundaries of the 54 stock voices, completely eliminating synthetic/distorted audio failure modes.</li>
-                    <li><strong>Anti-Overfitting Loop</strong>: Rotates through transcripts during candidate generation and cross-validates against all sentences before updating the global elite style tensor.</li>
-                </ul>
+                <h2>Manifold Realism (PCA Subspace Search)</h2>
+                <p style="margin: 0 0 1rem 0; color: var(--text-secondary)">
+                    To restrict search coordinates to the manifold of realistic human voices, style tensors (raw dimensionality: 130,560) are projected onto a <strong>15-dimensional subspace</strong> computed via Singular Value Decomposition (SVD) of the 54 stock voices. This captures 88% of vocal variance, preventing the optimization algorithm from drifting into adversarial regions of high similarity but degraded audio.
+                </p>
             </div>
 
             <div class="card card-full">
-                <h2>CPU Speed Optimizations</h2>
+                <h2>Evolutionary Search & Guards</h2>
                 <ul>
-                    <li><strong>Inference Mode</strong>: Bypasses autograd tape allocations in PyTorch using <code>torch.inference_mode()</code>, speeding up TTS synthesis by 50%.</li>
-                    <li><strong>Stock Embedding Cache</strong>: Caches the 54 stock voice embeddings to disk (<code>stock_embeddings_cache.npy</code>), reducing zero-shot ranking time from 50s to under 0.01s.</li>
-                    <li><strong>Short-Text Generation</strong>: Iterations evaluate on 4-word sentence slices, cutting generation time during the search loop by 4x.</li>
-                    <li><strong>LRU Caching</strong>: Implements in-memory wave bytes caching to avoid redundant embedding queries.</li>
+                    <li><strong>Warm-Start Initialization</strong>: Initializes from the best convex combination of stock voices found via Dirichlet sampling on the weight simplex.</li>
+                    <li><strong>Separable Diagonal CMA-ES</strong>: Operates directly in the 15-dimensional PCA space, learning dimension-wise standard deviations to focus search steps.</li>
+                    <li><strong>Anti-Overfitting Loop</strong>: Rotates texts per generation to avoid prosody overfitting, and validates candidates against full reference sentences before updating the elite.</li>
+                    <li><strong>Plateau & Noise Scheduling</strong>: Scales down step size <code>sigma</code> automatically if no fitness improvement is detected for 8 consecutive generations.</li>
                 </ul>
             </div>
         </div>
