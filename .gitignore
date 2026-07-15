@@ -3,3 +3,4 @@ __pycache__/
 *.wav
 *.npy
 voice.pt
+checkpoint_step_*.pt
