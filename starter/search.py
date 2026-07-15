@@ -42,8 +42,9 @@ class PerturbationSearch:
         return cand
 
 class CMAESSearch:
-    def __init__(self, initial_tensor: torch.Tensor, target_embedding: np.ndarray, texts: list[str], pop_size: int = 4):
+    def __init__(self, initial_tensor: torch.Tensor, target_embedding: np.ndarray, texts: list[str], stock_min: torch.Tensor, stock_max: torch.Tensor, pop_size: int = 4):
         self.mean, self.sigma, self.pop_size, self.target_embedding, self.texts = initial_tensor.clone(), 0.05, pop_size, target_embedding, texts
+        self.stock_min, self.stock_max = stock_min, stock_max
         self.best_tensor, self.best_score = self.mean.clone(), get_fitness(self.mean, target_embedding, texts)
         self.C_diag = torch.ones_like(self.mean)
         self.step_count = 0
@@ -51,7 +52,7 @@ class CMAESSearch:
         if sigma is not None: self.sigma = sigma
         active_text = [self.texts[self.step_count % len(self.texts)]]
         self.step_count += 1
-        cands = [self.mean + self.sigma * self.C_diag * torch.randn_like(self.mean) for _ in range(self.pop_size)]
+        cands = [torch.clamp(self.mean + self.sigma * self.C_diag * torch.randn_like(self.mean), self.stock_min, self.stock_max) for _ in range(self.pop_size)]
         scores = [get_fitness(c, self.target_embedding, active_text) for c in cands]
         idx = np.argsort(scores)[::-1]
         selected = [cands[i] for i in idx[:max(1, self.pop_size // 2)]]
@@ -63,11 +64,15 @@ class CMAESSearch:
         if score_full > self.best_score: self.best_tensor, self.best_score = self.mean.clone(), score_full
         return self.best_tensor, self.best_score
 
-def run_search(initial_tensor: torch.Tensor, target_embedding: np.ndarray, texts: list[str], iterations: int) -> tuple[torch.Tensor, float, list[tuple[int, float]]]:
-    searcher = CMAESSearch(initial_tensor, target_embedding, texts)
-    hist = []
+def run_search(initial_tensor: torch.Tensor, target_embedding: np.ndarray, texts: list[str], iterations: int, stock_min: torch.Tensor, stock_max: torch.Tensor) -> tuple[torch.Tensor, float, list[tuple[int, float]]]:
+    searcher = CMAESSearch(initial_tensor, target_embedding, texts, stock_min, stock_max)
+    hist, plateau, prev_best = [], 0, searcher.best_score
     for i in range(1, iterations + 1):
-        sigma = 0.05 if i <= int(iterations * 0.3) else (0.02 if i <= int(iterations * 0.7) else 0.005)
+        sigma = (0.05 if i <= int(iterations * 0.3) else (0.02 if i <= int(iterations * 0.7) else 0.005)) * (0.5 if plateau >= 8 else 1.0)
+        if plateau >= 8: plateau = 0
         best_t, best_s = searcher.step(sigma)
         hist.append((i, best_s))
+        plateau = 0 if best_s > prev_best else (plateau + 1)
+        prev_best = max(prev_best, best_s)
+        if i % 10 == 0: torch.save(best_t, f"checkpoint_step_{i}.pt")
     return best_t, best_s, hist

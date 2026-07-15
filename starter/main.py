@@ -28,7 +28,10 @@ def main() -> None:
     best_weights, _ = blend.search_blend_weights(top_voices, target, 30)
     initial_blend = blend.convex_blend(top_voices, best_weights)
     search_texts = [" ".join(t.split()[:4]) for t in texts[:1]]
-    best_tensor, _, _ = search.run_search(initial_blend, target, search_texts, args.iterations)
+    stock_tensors = torch.stack(list(stock.values()))
+    stock_min = stock_tensors.min(dim=0)[0]
+    stock_max = stock_tensors.max(dim=0)[0]
+    best_tensor, _, _ = search.run_search(initial_blend, target, search_texts, args.iterations, stock_min, stock_max)
     final_score = search.fitness(best_tensor, target, texts[:1])
     torch.save(best_tensor, args.output)
     print(final_score)
